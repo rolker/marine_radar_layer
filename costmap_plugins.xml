@@ -1,0 +1,5 @@
+<library path="lib/libmarine_radar_layer">
+  <class type="marine_radar_layer::MarineRadarLayer" base_class_type="costmap_2d::Layer">
+    <description>A marine radar obstacle layer for costmap_2d</description>
+  </class>
+</library>
