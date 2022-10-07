@@ -6,7 +6,7 @@
 #include <costmap_2d/layered_costmap.h>
 #include <marine_radar_layer/MarineRadarLayerConfig.h>
 #include <dynamic_reconfigure/server.h>
-#include <marine_msgs/RadarSectorStamped.h>
+#include <marine_sensor_msgs/RadarSector.h>
 
 namespace marine_radar_layer
 {
@@ -31,9 +31,9 @@ private:
   typedef std::shared_ptr<ReconfigureServer> ReconfigureServerPtr;
   ReconfigureServerPtr m_reconfigureServer;
 
-  void radarSectorCallback(const marine_msgs::RadarSectorStampedConstPtr &msg);
+  void radarSectorCallback(const marine_sensor_msgs::RadarSectorConstPtr &msg);
 
-  std::list<marine_msgs::RadarSectorStampedConstPtr> m_sector_buffer;
+  std::list<marine_sensor_msgs::RadarSectorConstPtr> m_sector_buffer;
   std::mutex m_sector_buffer_mutex;
 
   struct PositionedSector
@@ -42,7 +42,7 @@ private:
     double yaw;
     double x;
     double y;
-    marine_msgs::RadarSectorStampedConstPtr sector;
+    marine_sensor_msgs::RadarSectorConstPtr sector;
   };
 
   std::map<double, PositionedSector> m_sectors;

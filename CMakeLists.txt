@@ -6,7 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
     dynamic_reconfigure
     pluginlib
     roscpp
-    marine_msgs
+    marine_sensor_msgs
     geometry_msgs
     tf2_geometry_msgs
 )
@@ -19,7 +19,7 @@ catkin_package(
         dynamic_reconfigure
         pluginlib
         roscpp
-        marine_msgs
+        marine_sensor_msgs
         geometry_msgs
         tf2_geometry_msgs
     INCLUDE_DIRS include

@@ -48,7 +48,7 @@ void MarineRadarLayer::reconfigureCallback(MarineRadarLayerConfig &config, uint3
   }
 }
 
-void MarineRadarLayer::radarSectorCallback(const marine_msgs::RadarSectorStampedConstPtr &msg)
+void MarineRadarLayer::radarSectorCallback(const marine_sensor_msgs::RadarSectorConstPtr &msg)
 {
   std::lock_guard<std::mutex> lock(m_sector_buffer_mutex);
   m_sector_buffer.push_back(msg);
@@ -64,10 +64,10 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
 
   m_sector_buffer_mutex.lock();
   for(auto s: m_sector_buffer)
-    if(!s->sector.scanlines.empty())
+    if(!s->scanlines.empty())
     {
-      m_sectors[s->sector.scanlines.front().angle].sector = s;
-      m_sectors[s->sector.scanlines.front().angle].valid_position = false;
+      m_sectors[s->scanlines.front().angle].sector = s;
+      m_sectors[s->scanlines.front().angle].valid_position = false;
     }
   m_sector_buffer.clear();
   m_sector_buffer_mutex.unlock();
@@ -86,16 +86,16 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
       in.header.frame_id = s.second.sector->header.frame_id;
       in.pose.orientation.w = 1.0;
 
-      if(tf_->canTransform(m_global_frame_id, in.header.frame_id, in.header.stamp, ros::Duration(0.3)))
+      if(tf_->canTransform(m_global_frame_id, in.header.frame_id, in.header.stamp, ros::Duration(1.0)))
       {
         tf_->transform(in, out, m_global_frame_id);
         s.second.x = out.pose.position.x;
         s.second.y = out.pose.position.y;
         s.second.yaw = tf2::getYaw(out.pose.orientation);
         s.second.valid_position = true;
-        for(auto scanline: s.second.sector->sector.scanlines)
+        for(auto scanline: s.second.sector->scanlines)
         {
-          double yaw = s.second.yaw + M_PI*-scanline.angle/180.0;
+          double yaw = s.second.yaw + scanline.angle;
           double cos_yaw = cos(yaw);
           double sin_yaw = sin(yaw);
           double dr = scanline.range/double(scanline.intensities.size());
