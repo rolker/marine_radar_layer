@@ -64,10 +64,10 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
 
   m_sector_buffer_mutex.lock();
   for(auto s: m_sector_buffer)
-    if(!s->scanlines.empty())
+    if(!s->intensities.empty())
     {
-      m_sectors[s->scanlines.front().angle].sector = s;
-      m_sectors[s->scanlines.front().angle].valid_position = false;
+      m_sectors[s->angle_min].sector = s;
+      m_sectors[s->angle_min].valid_position = false;
     }
   m_sector_buffer.clear();
   m_sector_buffer_mutex.unlock();
@@ -93,19 +93,21 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
         s.second.y = out.pose.position.y;
         s.second.yaw = tf2::getYaw(out.pose.orientation);
         s.second.valid_position = true;
-        for(auto scanline: s.second.sector->scanlines)
+        double angle = s.second.sector->angle_min;
+        auto range = s.second.sector->range_max-s.second.sector->range_min;
+        for(auto scanline: s.second.sector->intensities)
         {
-          double yaw = s.second.yaw + scanline.angle;
+          double yaw = s.second.yaw + angle;
           double cos_yaw = cos(yaw);
           double sin_yaw = sin(yaw);
-          double dr = scanline.range/double(scanline.intensities.size());
-          for(int i = 0; i < scanline.intensities.size(); i++)
+          double dr = range/double(scanline.echoes.size());
+          for(int i = 0; i < scanline.echoes.size(); i++)
           {
             if(dr*i > m_blanking_distance)
             {
               unsigned int map_x, map_y;
               if(worldToMap(s.second.x+cos_yaw*dr*i, s.second.y+sin_yaw*dr*i, map_x, map_y))
-                radar_returns[std::make_pair(map_x, map_y)].push_back(scanline.intensities[i]);
+                radar_returns[std::make_pair(map_x, map_y)].push_back(scanline.echoes[i]*255);
             }
           }
         }
