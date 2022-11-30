@@ -144,12 +144,12 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
     max_y_map = std::max(max_y_map, ret.first.second);
   }
 
-  ROS_INFO_STREAM("updateBounds in: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
+  //ROS_INFO_STREAM("updateBounds in: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
   
   mapToWorld(min_x_map, min_y_map, *min_x, *min_y);  
   mapToWorld(max_x_map, max_y_map, *max_x, *max_y);  
 
-  ROS_INFO_STREAM("updateBounds out: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
+  //ROS_INFO_STREAM("updateBounds out: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
 }
 
 void MarineRadarLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
@@ -165,10 +165,17 @@ void MarineRadarLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i
       int index = getIndex(i, j);
       if (costmap_[index] == costmap_2d::NO_INFORMATION)
         continue;
-      if (costmap_[index] >= m_mark_threshold)
-        master_grid.setCost(i, j, costmap_2d::LETHAL_OBSTACLE);
-      else if(costmap_[index] <= m_clear_threshold)
-        master_grid.setCost(i, j, costmap_2d::FREE_SPACE);
+      float cost = master_grid.getCost(i, j);
+      cost += costmap_[index];
+      cost /=2.0;
+      if(cost > 200.0)
+        master_grid.setCost(i, j, costmap_2d::NO_INFORMATION );
+      else
+        master_grid.setCost(i, j, cost/2.0 );
+      // if (costmap_[index] >= m_mark_threshold)
+      //   master_grid.setCost(i, j, costmap_2d::LETHAL_OBSTACLE);
+      // else if(costmap_[index] <= m_clear_threshold)
+      //   master_grid.setCost(i, j, costmap_2d::FREE_SPACE);
     }
   }
 }
