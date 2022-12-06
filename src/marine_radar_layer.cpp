@@ -74,7 +74,7 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
 
   // collect returns in map cell sized bins
   typedef std::pair<unsigned int, unsigned int> MapIndex;
-  std::map<MapIndex, std::vector<uint8_t> > radar_returns;
+  std::map<MapIndex, std::vector<float> > radar_returns;
 
   // find transformations if missing
   for(auto& s: m_sectors)
@@ -107,9 +107,10 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
             {
               unsigned int map_x, map_y;
               if(worldToMap(s.second.x+cos_yaw*dr*i, s.second.y+sin_yaw*dr*i, map_x, map_y))
-                radar_returns[std::make_pair(map_x, map_y)].push_back(scanline.echoes[i]*255);
+                radar_returns[std::make_pair(map_x, map_y)].push_back(scanline.echoes[i]);
             }
           }
+          angle += s.second.sector->angle_increment;
         }
       }
     }
@@ -132,11 +133,10 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
     float average_intensity = sum/float(ret.second.size());
     int index = getIndex(ret.first.first, ret.first.second);
     if(costmap_[index] == costmap_2d::NO_INFORMATION)
-      costmap_[index] = average_intensity;
+      costmap_[index] = average_intensity*254;
     else
     {
-      costmap_[index] += average_intensity;
-      costmap_[index] /= 2;
+      costmap_[index] = costmap_[index]*.5 + average_intensity*254*0.5;
     }
     min_x_map = std::min(min_x_map, ret.first.first);
     max_x_map = std::max(max_x_map, ret.first.first);
