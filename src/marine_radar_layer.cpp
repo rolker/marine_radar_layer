@@ -72,15 +72,23 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
   m_sector_buffer.clear();
   m_sector_buffer_mutex.unlock();
 
-  // collect returns in map cell sized bins
-  typedef std::pair<unsigned int, unsigned int> MapIndex;
-  std::map<MapIndex, std::vector<float> > radar_returns;
+  double new_min_x = std::nan("");
+  double new_max_x = std::nan("");
+  double new_min_y = std::nan("");
+  double new_max_y = std::nan("");
 
   // find transformations if missing
   for(auto& s: m_sectors)
   {
     if(!s.second.valid_position)
     {
+      if(s.second.sector->range_max != m_last_range)
+      {
+        resetMap(0, 0, getSizeInCellsX(), getSizeInCellsY());
+        m_last_range = s.second.sector->range_max;
+        mapToWorld(0, 0, new_min_x, new_min_y);
+        mapToWorld(getSizeInCellsX(), getSizeInCellsY(), new_max_x, new_max_y);
+      }
       geometry_msgs::PoseStamped in, out;
       in.header.stamp = s.second.sector->header.stamp;
       in.header.frame_id = s.second.sector->header.frame_id;
@@ -93,70 +101,55 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
         s.second.y = out.pose.position.y;
         s.second.yaw = tf2::getYaw(out.pose.orientation);
         s.second.valid_position = true;
-        double angle = s.second.sector->angle_min;
-        auto range = s.second.sector->range_max-s.second.sector->range_min;
-        for(auto scanline: s.second.sector->intensities)
-        {
-          double yaw = s.second.yaw + angle;
-          double cos_yaw = cos(yaw);
-          double sin_yaw = sin(yaw);
-          double dr = range/double(scanline.echoes.size());
-          for(int i = 0; i < scanline.echoes.size(); i++)
+
+
+        for(unsigned int i = 0; i < getSizeInCellsX(); i++)
+          for(unsigned int j = 0; j < getSizeInCellsY(); j++)
           {
-            if(dr*i > m_blanking_distance)
+            double wx, wy;
+            mapToWorld(i, j, wx, wy);
+            float cost = s.second.getValue(wx, wy, m_blanking_distance);
+            if(!std::isnan(cost))
             {
-              unsigned int map_x, map_y;
-              if(worldToMap(s.second.x+cos_yaw*dr*i, s.second.y+sin_yaw*dr*i, map_x, map_y))
-                radar_returns[std::make_pair(map_x, map_y)].push_back(scanline.echoes[i]);
+              setCost(i,j, cost*252);
+              if(isnan(new_min_x))
+              {
+                new_min_x = wx;
+                new_max_x = wx;
+                new_min_y = wy;
+                new_max_y = wy;
+              }
+              else
+              {
+                new_min_x = std::min(wx, new_min_x);
+                new_max_x = std::max(wx, new_max_x);
+                new_min_y = std::min(wy, new_min_y);
+                new_max_y = std::max(wy, new_max_y);
+              }
             }
           }
-          angle += s.second.sector->angle_increment;
-        }
       }
     }
   }
 
-  current_ = !radar_returns.empty();
-  
-  if(radar_returns.empty())
-    return;
-  
-  unsigned min_x_map, min_y_map, max_x_map, max_y_map;
-  min_x_map = max_x_map = radar_returns.begin()->first.first;
-  min_y_map = max_y_map = radar_returns.begin()->first.second;
-
-  for(auto ret: radar_returns)
+  if(isnan(new_min_x))
   {
-    float sum = 0;
-    for(auto intensity: ret.second)
-      sum += intensity;
-    float average_intensity = sum/float(ret.second.size());
-    int index = getIndex(ret.first.first, ret.first.second);
-    if(costmap_[index] == costmap_2d::NO_INFORMATION)
-      costmap_[index] = average_intensity*254;
-    else
-    {
-      costmap_[index] = costmap_[index]*.5 + average_intensity*254*0.5;
-    }
-    min_x_map = std::min(min_x_map, ret.first.first);
-    max_x_map = std::max(max_x_map, ret.first.first);
-    min_y_map = std::min(min_y_map, ret.first.second);
-    max_y_map = std::max(max_y_map, ret.first.second);
+    current_ = false;
   }
-
-  //ROS_INFO_STREAM("updateBounds in: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
-  
-  mapToWorld(min_x_map, min_y_map, *min_x, *min_y);  
-  mapToWorld(max_x_map, max_y_map, *max_x, *max_y);  
-
-  //ROS_INFO_STREAM("updateBounds out: " <<  *min_x << ", " << *min_y << " - " << *max_x << ", " << *max_y);
+  else
+  {
+    current_ = true;
+    *min_x = new_min_x;
+    *max_x = new_max_x;
+    *min_y = new_min_y;
+    *max_y = new_max_y;
+  }
 }
 
 void MarineRadarLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j)
 {
   if (!enabled_)
     return;
-
 
   for (int j = min_j; j < max_j; j++)
   {
@@ -165,19 +158,58 @@ void MarineRadarLayer::updateCosts(costmap_2d::Costmap2D& master_grid, int min_i
       int index = getIndex(i, j);
       if (costmap_[index] == costmap_2d::NO_INFORMATION)
         continue;
-      float cost = master_grid.getCost(i, j);
-      cost += costmap_[index];
-      cost /=2.0;
-      if(cost > 200.0)
-        master_grid.setCost(i, j, costmap_2d::NO_INFORMATION );
-      else
-        master_grid.setCost(i, j, cost/2.0 );
-      // if (costmap_[index] >= m_mark_threshold)
-      //   master_grid.setCost(i, j, costmap_2d::LETHAL_OBSTACLE);
-      // else if(costmap_[index] <= m_clear_threshold)
-      //   master_grid.setCost(i, j, costmap_2d::FREE_SPACE);
+      master_grid.setCost(i,j, costmap_[index]);
     }
   }
+}
+
+
+float MarineRadarLayer::PositionedSector::getValue(double target_x, double target_y, double blanking_distance)
+{
+  if(valid_position && sector && !sector->intensities.empty())
+  {
+    double dx = target_x - x;
+    double dy = target_y - y;
+    double r = sqrt(dx*dx+dy*dy);
+    if(r >= blanking_distance && r <= sector->range_max && r >= sector->range_min)
+    {
+      double theta = atan2(dy, dx);
+      if (theta < 0.0)
+        theta += 2.0*M_PI;
+      theta -= yaw;
+      if(theta < 0.0)
+        theta += 2.0*M_PI;
+      if (theta > 2.0*M_PI)
+        theta -= 2.0*M_PI;
+      double angle_proportion = -1.0;
+      if(sector->angle_increment > 0.0)
+      {
+        double angle_max = sector->angle_max;
+        if (sector->angle_max < sector->angle_min)
+          angle_max += 2.0*M_PI;
+        angle_proportion = (theta-sector->angle_min)/(angle_max-sector->angle_min);
+      }
+      else
+      {
+        double angle_max = sector->angle_max;
+        if (sector->angle_max > sector->angle_min)
+          angle_max -= 2.0*M_PI;
+        angle_proportion = -(theta-angle_max)/(sector->angle_min-angle_max);
+      }
+      if(angle_proportion >= 0.0 && angle_proportion <= 1.0)
+      {
+        int angle_index = (sector->intensities.size()-1)*angle_proportion;
+        if(angle_index >= 0 && angle_index < sector->intensities.size())
+        {
+          double range_proportion = (r-sector->range_min)/(sector->range_max-sector->range_min);
+          int range_index = (sector->intensities[angle_index].echoes.size()-1)*range_proportion;
+          if(range_index >= 0 && range_index < sector->intensities[angle_index].echoes.size())
+            return sector->intensities[angle_index].echoes[range_index];
+        }
+      }
+    }
+  }
+  return std::nanf("");
 }
 
 } // namespace marine_radar_layer

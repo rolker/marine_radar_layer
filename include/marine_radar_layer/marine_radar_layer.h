@@ -43,6 +43,7 @@ private:
     double x;
     double y;
     marine_sensor_msgs::RadarSectorConstPtr sector;
+    float getValue(double x, double y, double blanking_distance=0.0);
   };
 
   std::map<double, PositionedSector> m_sectors;
@@ -55,6 +56,8 @@ private:
   float m_mark_threshold;
   float m_blanking_distance;
   float m_maximum_intensity;
+
+  double m_last_range = 0.0; // use to detect radar range change
 };
 
 } // namespace marine_radar_layer
