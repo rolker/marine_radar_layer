@@ -66,8 +66,8 @@ void MarineRadarLayer::updateBounds(double robot_x, double robot_y, double robot
   for(auto s: m_sector_buffer)
     if(!s->intensities.empty())
     {
-      m_sectors[s->angle_min].sector = s;
-      m_sectors[s->angle_min].valid_position = false;
+      m_sectors[s->angle_start].sector = s;
+      m_sectors[s->angle_start].valid_position = false;
     }
   m_sector_buffer.clear();
   m_sector_buffer_mutex.unlock();
@@ -184,17 +184,13 @@ float MarineRadarLayer::PositionedSector::getValue(double target_x, double targe
       double angle_proportion = -1.0;
       if(sector->angle_increment > 0.0)
       {
-        double angle_max = sector->angle_max;
-        if (sector->angle_max < sector->angle_min)
-          angle_max += 2.0*M_PI;
-        angle_proportion = (theta-sector->angle_min)/(angle_max-sector->angle_min);
+        double angle_max = sector->angle_start + sector->angle_increment*(sector->intensities.size()-1);
+        angle_proportion = (theta-sector->angle_start)/(angle_max-sector->angle_start);
       }
       else
       {
-        double angle_max = sector->angle_max;
-        if (sector->angle_max > sector->angle_min)
-          angle_max -= 2.0*M_PI;
-        angle_proportion = -(theta-angle_max)/(sector->angle_min-angle_max);
+        double angle_max = sector->angle_start + sector->angle_increment*(sector->intensities.size()-1);
+        angle_proportion = -(theta-angle_max)/(sector->angle_start-angle_max);
       }
       if(angle_proportion >= 0.0 && angle_proportion <= 1.0)
       {
